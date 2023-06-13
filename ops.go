@@ -1,4 +1,4 @@
-package iudex
+package main
 
 import (
 	"fmt"
