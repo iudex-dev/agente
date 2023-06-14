@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -33,7 +35,7 @@ func Compile(sourceName, binaryName string) (output string, err error) {
 	outBytes, err := exec.Command(
 		"docker", "run", "--rm", "-v", ".:/iudex",
 		"iudex-compiler-clang",
-		"clang++", "-static",	"-o",
+		"clang++", "-static", "-o",
 		fmt.Sprintf("/iudex/%s", binaryName),
 		fmt.Sprintf("/iudex/%s", sourceName),
 	).CombinedOutput()
@@ -53,4 +55,40 @@ func ExecSandboxed(binaryName string) (output string, err error) {
 
 	output = string(outBytes)
 	return
+}
+
+type CarcerResult struct {
+	CpuTime  int64  `json:"cpu_time"`
+	RealTime int64  `json:"real_time"`
+	Memory   int64  `json:"memory"`
+	ExitCode int    `json:"exit_code"`
+	Report   string `json:"report"`
+}
+
+func ProcessSubmission(code string, result *CarcerResult) (err error) {
+	file, err := os.CreateTemp(".", "iudex-*.cc")
+	if err != nil {
+		return fmt.Errorf("cannot process submission: %s", err)
+	}
+	_, err = file.WriteString(code)
+	if err != nil {
+		return fmt.Errorf("cannot write code into '%s': %s", file.Name(), err)
+	}
+	err = file.Close()
+	if err != nil {
+		return fmt.Errorf("cannot close file '%s': %s", file.Name(), err)
+	}
+	out, err := Compile(file.Name(), "iudex-binary")
+	if err != nil {
+		exitWithError(out)
+	}
+	out, err = ExecSandboxed("iudex-binary")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Execution error: %s\n", err)
+	}
+
+	reader := strings.NewReader(out)
+	dec := json.NewDecoder(reader)
+	dec.Decode(&result)
+	return nil
 }
