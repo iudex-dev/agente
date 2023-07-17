@@ -1,4 +1,4 @@
-module github.com/iudex-dev/iudex
+module github.com/iudex-dev/agente
 
 go 1.20
 
